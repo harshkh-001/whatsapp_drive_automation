@@ -20,7 +20,7 @@ This project creates an **n8n workflow** that listens to WhatsApp messages and p
 - Utilizes MIME-type aware nodes in n8n to properly read and process different file types.
 
 ### 3. AI Summarization
-- Instead of OpenAI, this project uses the **DeepSeek Gemma model** for generating concise summaries of documents within n8n.
+- Instead of OpenAI, this project uses the **Gemini Gemma 3 model** for generating concise summaries of documents within n8n.
 
 ### 4. Logging and Safety
 - Maintains an audit spreadsheet/log of all operations for traceability.
@@ -55,9 +55,9 @@ This project creates an **n8n workflow** that listens to WhatsApp messages and p
 - Download the Client ID and Client Secret.
 - Import these credentials into n8n's Google Drive OAuth2 credentials.
 
-#### 3. DeepSeek Gemma Model
-- Obtain API credentials for DeepSeek Gemma.
-- Configure n8n to use the DeepSeek Gemma API endpoint and your credentials in the AI summarization node.
+#### 3. Gemini Gemma Model
+- Obtain API credentials for Gemini Gemma.
+- Configure n8n to use the Gemini Gemma API endpoint and your credentials in the AI summarization node.
 
 #### 4. Running n8n with Docker
 - Clone this repo:
