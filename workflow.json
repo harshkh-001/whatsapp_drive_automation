@@ -1,0 +1,1199 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-gdrive",
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "723104b8-1cc4-4850-80f8-7de5528ceab1",
+      "name": "Webhook - Incoming WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2016,
+        160
+      ],
+      "webhookId": "87e64b70-a17d-46c7-9cb8-5c0fa393a04e"
+    },
+    {
+      "parameters": {
+        "functionCode": "const msg = ($json.body.Body || '').trim();\nconst parts = msg.split(/\\s+/);\nconst cmd = parts[0]?.toUpperCase() || '';\nlet args = parts.slice(1).join(\" \");\nargs = args.substring(1);\nconst from = ($json.body.From || '').split(\":\")[1];\nreturn [{ json: { cmd, args, from } }];\n\n"
+      },
+      "id": "3dbb28f7-d6e4-4424-8bb2-5a79188536f4",
+      "name": "Function - Parse Command",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1776,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"cmd\"]}}",
+              "value2": "LIST"
+            }
+          ]
+        }
+      },
+      "id": "0b5ac6c5-cb1d-4ebf-9b3f-0f68202b1012",
+      "name": "IF - LIST Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1504,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "=name = '{{ $json[\"args\"] }}'",
+        "limit": 1,
+        "options": {}
+      },
+      "id": "ec9d37ce-5ee1-47d6-a35a-62ebb7c17d19",
+      "name": "Google Drive - List Files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\n\nif (!items.length) {\n  return [{ json: { status: 'error', message: 'Unable to find folder or folder empty' } }];\n}\n\n// Extract all names\nlet files = items.map(item => item.json.name);\n\n// Filter out unwanted entries\nfiles = files\n  .filter(name => name && name.trim() !== '' && !name.startsWith('.') && !/^\\d+$/.test(name)) // remove empty, dot files, pure numbers\n  .filter((name, index, self) => self.indexOf(name) === index); // remove duplicates\n\n// Add numbering\nfiles = files.map((name, idx) => `${idx + 1}. ${name}`);\n\nlet filesList = files.join('\\n');\n\n// Apply 1600 character limit with ellipsis\nconst maxLen = 1600;\nif (filesList.length > maxLen) {\n  filesList = filesList.slice(0, maxLen - 3) + '...';\n}\n\nconst fromValue = $node[\"Function - Parse Command\"].json[\"from\"];\n\nreturn [{ json: { status: 'ok', files: filesList, from: fromValue } }];\n\n"
+      },
+      "id": "02195279-d6ed-49df-a100-dfd72190f2a0",
+      "name": "Function - Check Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"status\"]}}",
+              "value2": "ok"
+            }
+          ]
+        }
+      },
+      "id": "54dd53ed-166f-48ac-91ec-92c0b5cc2413",
+      "name": "IF - Files Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $json[\"from\"] }}",
+        "toWhatsapp": true,
+        "message": "=Files:\n{{ $json[\"files\"] }}",
+        "options": {}
+      },
+      "id": "01a8f5c8-6b71-4b58-8908-373e2d67dc6a",
+      "name": "Twilio - Send Files List",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -80
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "E9nYHpdnJj3SzK8B",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{$json[\"from\"]}}",
+        "message": "={{ $json[\"message\"] }}",
+        "options": {}
+      },
+      "id": "dfa347d9-e0b1-4daa-b015-dcc4c977e4c5",
+      "name": "Twilio - Send Error/Empty Message",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        224,
+        176
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "E9nYHpdnJj3SzK8B",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $json[\"from\"] }}",
+        "toWhatsapp": true,
+        "message": "=Unknown command received: {{$json[\"cmd\"]}}",
+        "options": {}
+      },
+      "id": "8e71de65-dc1c-4512-89d8-4782d74daf95",
+      "name": "Twilio - Send Unknown Command",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        592,
+        1376
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "E9nYHpdnJj3SzK8B",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1p4_HdeEFHXr8Pr7U8EsCkt5hYnBXl7JQDb15C3600QE",
+          "mode": "list",
+          "cachedResultName": "logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1p4_HdeEFHXr8Pr7U8EsCkt5hYnBXl7JQDb15C3600QE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1p4_HdeEFHXr8Pr7U8EsCkt5hYnBXl7JQDb15C3600QE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "User Input ( CMD )": "={{ $json['cmd'] }}",
+            "User Input ( path )": "={{ $json['path'] }}",
+            "From": "={{ $json['To'] }}",
+            "To": "={{ $json['From'] }}",
+            "Time": "={{ $json['time'] }}",
+            "Output Message": "={{ $json['message'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "User Input ( CMD )",
+              "displayName": "User Input ( CMD )",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User Input ( path )",
+              "displayName": "User Input ( path )",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "From",
+              "displayName": "From",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "To",
+              "displayName": "To",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Time",
+              "displayName": "Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Output Message",
+              "displayName": "Output Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1056,
+        512
+      ],
+      "id": "dfa32957-ca4e-4d6a-852f-519dc391dcb8",
+      "name": "Append row in sheet",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PdEA9SlcM6xPHRDT",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"cmd\"]}}",
+              "value2": "MOVE"
+            }
+          ]
+        }
+      },
+      "id": "38e601d7-9a0a-411b-bb7f-be9459ef0638",
+      "name": "IF - MOVE Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1408,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"cmd\"]}}",
+              "value2": "DELETE"
+            }
+          ]
+        }
+      },
+      "id": "e2e65a91-23fe-4836-87f0-9e2c7715c706",
+      "name": "IF - DELETE Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1376,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"cmd\"]}}",
+              "value2": "SUMMARY"
+            }
+          ]
+        }
+      },
+      "id": "9e140f98-cc27-4d48-8a87-a0d52055635d",
+      "name": "IF - SUMMARY Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "='{{ $json[\"id\"] }}' in parents",
+        "options": {}
+      },
+      "id": "7b9eb761-1bb2-4dda-80e3-d0fe27f9cef5",
+      "name": "Google Drive - List Files2",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const msg = ($json[\"args\"] || '').trim();\nconst parts = msg.split(\"/\");\nconst source = parts[0].trim();\nconst args = parts[1].trim();\nconst des = parts[2].trim();\nreturn [{ json: {source, args, des} }];\n\n"
+      },
+      "id": "06e7a642-2a30-4829-8169-8f243ec00e31",
+      "name": "Function - Parse Command1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json[\"file_id\"] }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "=My Drive",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json[\"des_id\"] }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -384,
+        768
+      ],
+      "id": "c0409b12-a9d0-4b67-81e8-b9a48432e314",
+      "name": "Move file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "=name = '{{ $json[\"args\"] }}' or name = '{{ $json[\"des\"] }}'",
+        "limit": 2,
+        "options": {}
+      },
+      "id": "97a96f02-4f74-4902-9148-e555bbe40bc9",
+      "name": "Google Drive - List Files3",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        768
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const des = $node[\"Function - Parse Command1\"].json['des']\n\nconst data = $input.all();\n\nlet des_id = null;\nlet file_id = null;\n\nif(data[0].json.name = \"des\"){\n  des_id = data[0].json.id;\n  file_id = data[1].json.id;\n}\nelse{\n  des_id = data[1].json.id;\n  file_id = data[0].json.id;\n}\nreturn [{ json: {des_id, file_id} }];\n"
+      },
+      "id": "467cd41c-c6ef-4192-a9a9-2016b808fcd0",
+      "name": "Function - Parse Command2",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "=+919352830108",
+        "toWhatsapp": true,
+        "message": "=Moved Successfully",
+        "options": {}
+      },
+      "id": "1d1a5e68-614f-4f15-84d6-b568cbb1c930",
+      "name": "Twilio - Send Files List2",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        768
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "E9nYHpdnJj3SzK8B",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "=name = '{{ $json[\"folder\"] }}'",
+        "limit": 1,
+        "options": {}
+      },
+      "id": "2531270a-94ec-438e-8a5a-8e8c8255a51a",
+      "name": "Google Drive - List Files4",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        1008
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const msg = ($json[\"args\"] || '').trim();\nconst parts = msg.split(\"/\");\nconst n = parts.length;\nconst folder = (parts[n-2] || \"parents\").trim();\nconst file = parts[n-1].trim();\nreturn [{ json: {folder, file} }];\n\n"
+      },
+      "id": "39252faa-d0a7-4bc7-9018-c7aa84e1c7db",
+      "name": "Function - Parse Command3",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1072,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const file = $node[\"Function - Parse Command3\"].json['file'];\n\n\nconst folder_id = ($json['id'] || '').trim();\n\nreturn [{ json: {file, folder_id} }];\n\n"
+      },
+      "id": "e009c1e1-9679-4615-a796-96e88607e584",
+      "name": "Function - Parse Command4",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "=name = '{{$json[\"file\"]}}' and '{{$json[\"folder_id\"]}}' in parents",
+        "limit": 1,
+        "options": {}
+      },
+      "id": "d174b7a7-ed17-423f-92f3-bfeae6795577",
+      "name": "Google Drive - List Files5",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        1008
+      ],
+      "alwaysOutputData": false,
+      "retryOnFail": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteFile",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json['id'] }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        176,
+        1008
+      ],
+      "id": "b7a9ed51-1f66-47ac-a120-321fc7f4fc31",
+      "name": "Delete a file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "=+919352830108",
+        "toWhatsapp": true,
+        "message": "=Deleted Successfully",
+        "options": {}
+      },
+      "id": "1a3c07b7-6953-4827-9c09-d1be5df48c9c",
+      "name": "Twilio - Send Files List3",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        512,
+        1008
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "E9nYHpdnJj3SzK8B",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const cmd = $node[\"Function - Parse Command\"].json['cmd'] || \"\";\nconst path = $node[\"Function - Parse Command\"].json['args'] || \"\";\n\nconst data = $input.all();\n\nconst To = ($node[\"Webhook - Incoming WhatsApp\"].json.body.To) || \"\";\nconst From = ($node[\"Webhook - Incoming WhatsApp\"].json.body.From) || \"\";\n\nconst time = new Date().toISOString();\n\nconst message = (data[0]?.json?.body) || \"\";\n\nreturn [{ json: { cmd, path, To, From, time, message } }];\n\n"
+      },
+      "id": "08c85e6e-7b19-4183-b1ef-429a5d50bd3f",
+      "name": "Function - Parse Command5",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        752,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "=name = '{{ $json[\"args\"] }}'",
+        "limit": 1,
+        "options": {}
+      },
+      "id": "fc48d2eb-4359-43bb-b7ad-ed11f28f1ea2",
+      "name": "Google Drive - List Files1",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -1184,
+        480
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useQueryString": true,
+        "queryString": "='{{ $json[\"id\"] }}' in parents",
+        "options": {}
+      },
+      "id": "849e0061-30e1-4b9f-9693-356491038220",
+      "name": "Google Drive - List Files6",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        480
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{$json[\"id\"]}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -720,
+        480
+      ],
+      "id": "28dc4427-d839-4d4c-b264-30e3a8824692",
+      "name": "HTTP Request1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fLP2fLlQof85X7CG",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\n\nlet promptLines = ['Files found:'];\n\nitems.forEach((item, index) => {\n  const file = item.json;\n  const name = file.name || 'Unknown';\n  const mime = file.mimeType || 'Unknown MIME type';\n  promptLines.push(`${index + 1}. ${name} (${mime})`);\n});\n\nconst prompt = promptLines.join('\\n');\n\nreturn [{ json: { prompt } }];\n\n\n\n"
+      },
+      "id": "a3b71a9c-7ed3-4d53-a142-99c6d40c8fb6",
+      "name": "Function - Check Results1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemma-3-4b-it",
+          "mode": "list",
+          "cachedResultName": "models/gemma-3-4b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=give me this data in proper summary type bulllet point with full information of each file \nmake sure to generate it in less than 1500 charectors always\n{{ $json['prompt'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        480
+      ],
+      "id": "797de23e-ded2-406a-aa30-c548992f437f",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "OwC4mnQiVi89Uwqw",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const response = $input.all()[0].json;  // assuming this is the JSON you pasted\n\n// Navigate to the text part\nconst summaryText = response.content?.parts?.[0]?.text || 'No summary available';\n\nconst markdownSummary =summaryText;\n\n// Convert double asterisks **text** to single asterisks *text* for WhatsApp\nconst whatsappFriendly = markdownSummary.replace(/\\*\\*(.*?)\\*\\*/g, '*$1*');\n\nreturn [{ json: { summary: whatsappFriendly } }];\n// Return it as plain text for the user\n\n\n"
+      },
+      "id": "c31a453e-242e-4b3e-9925-4b38ec2f2332",
+      "name": "Function - Check Results2",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        96,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "=+919352830108",
+        "toWhatsapp": true,
+        "message": "={{ $json['summary'] }}",
+        "options": {}
+      },
+      "id": "9688b1c3-fdd8-4b72-aad5-261a22c36cda",
+      "name": "Twilio - Send Files List4",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        320,
+        480
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "E9nYHpdnJj3SzK8B",
+          "name": "Twilio account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook - Incoming WhatsApp": [
+      {
+        "json": {
+          "headers": {
+            "host": "localhost:5678",
+            "connection": "keep-alive",
+            "content-length": "54",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "___internal-request-id": "4d3d1fa4-4e17-4aa5-be77-ef0f594e929a",
+            "sec-ch-ua": "\"Not;A=Brand\";v=\"99\", \"Google Chrome\";v=\"139\", \"Chromium\";v=\"139\"",
+            "content-type": "application/json",
+            "sec-ch-ua-mobile": "?0",
+            "accept": "*/*",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-storage-access": "active",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+            "cookie": "csrftoken=PzHpoARu2QnblZMAdc74vbzfQDMtX59T; rl_page_init_referrer=RudderEncrypt%3AU2FsdGVkX1%2FF3sZnxEKN4WVw7UmNJQncG7F3PO5EaOQ%3D; rl_page_init_referring_domain=RudderEncrypt%3AU2FsdGVkX1%2Bp3J2xaBfc9EcxD%2B4668gE4miYQBr6gJ8%3D; rl_anonymous_id=RudderEncrypt%3AU2FsdGVkX18v%2BeOwVUL6ZGwRrhl5SHIQuZo3i62xazVRXzws3pnBaLF%2F4zMbFJMOlby%2F8dRD6O6TsusJgStB%2Fg%3D%3D; rl_user_id=RudderEncrypt%3AU2FsdGVkX1%2BXWPvmv6y8qEG5NNr5V47z8iWFIOWvFX79kQrDB0SGSAUCMmCLstaMaKn10edl01B2bW1iQGRxLnpbTy29frexCYXzhKyT1EKHvTO24PgQ5je0RnI7llZm4NXrnWKKy2JX8bWcb3lWez01M8rZ4xMMSbJq75Mq%2FXg%3D; rl_trait=RudderEncrypt%3AU2FsdGVkX19dqcxfWUxt8mUY6DqjSd%2FmorrzoRklDVjIDtb1abLsdtEwH6jmtfX9tpiXWx1%2Fj9a1vI0K6ILiZuhvNzxcfC5JAMwNQfDBLFzAIq%2FvUlYc8urayJzYogA%2B1HSO9DnfYGdHPYhJfNV8hA%3D%3D; ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog=%7B%22distinct_id%22%3A%223154398f75d44a6d1698ed1f133875e2aea18ea96069107723ebadad01b47711%230d74ad33-a6f4-47e5-8c04-52b0aeb7f1a0%22%2C%22%24sesid%22%3A%5B1754683479476%2C%2201988ae5-3146-7378-9cf4-3dfcb227c9bf%22%2C1754676932934%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22http%3A%2F%2Flocalhost%3A5678%2Fsetup%22%7D%7D; rl_session=RudderEncrypt%3AU2FsdGVkX19SiEtlM11rNkhH65c4s6bNWvDJwT75eIm6sd8DQJEwAAxV6wK8WusO9crQSEhoBtsiKaKvPsFOUtfJ44kWZRePq%2Fyg4N%2FxCmnry2VDrgCMxKJePphYEjU4qMo%2BP8N2oub1NGNjYBvZag%3D%3D"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "Body": "summary /new",
+            "From": "whatsapp:+919352830108",
+            "To": "whatsapp:+14155238886"
+          },
+          "webhookUrl": "http://localhost:5678/webhook-test/whatsapp-gdrive",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook - Incoming WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Parse Command": {
+      "main": [
+        [
+          {
+            "node": "IF - LIST Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - LIST Command?": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - SUMMARY Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Check Results": {
+      "main": [
+        [
+          {
+            "node": "IF - Files Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Files Found?": {
+      "main": [
+        [
+          {
+            "node": "Twilio - Send Files List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Twilio - Send Error/Empty Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - SUMMARY Command?": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - MOVE Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - MOVE Command?": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - DELETE Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - DELETE Command?": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Twilio - Send Unknown Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Parse Command1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files2": {
+      "main": [
+        [
+          {
+            "node": "Function - Check Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files3": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Parse Command2": {
+      "main": [
+        [
+          {
+            "node": "Move file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move file": {
+      "main": [
+        [
+          {
+            "node": "Twilio - Send Files List2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Parse Command3": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files4": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Parse Command4": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files5": {
+      "main": [
+        [
+          {
+            "node": "Delete a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete a file": {
+      "main": [
+        [
+          {
+            "node": "Twilio - Send Files List3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio - Send Files List": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio - Send Error/Empty Message": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio - Send Files List3": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio - Send Files List2": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio - Send Unknown Command": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Parse Command5": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files1": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - List Files6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - List Files6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Function - Check Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Check Results1": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Function - Check Results2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Check Results2": {
+      "main": [
+        [
+          {
+            "node": "Twilio - Send Files List4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio - Send Files List4": {
+      "main": [
+        [
+          {
+            "node": "Function - Parse Command5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "YtgJNjbqPFAmXQYN"
+  },
+  "versionId": "a57f4cd0-318a-4458-a493-e6e9b3518e3f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3154398f75d44a6d1698ed1f133875e2aea18ea96069107723ebadad01b47711"
+  },
+  "id": "Xe6DdpM1nW90d7bN",
+  "tags": []
+}
